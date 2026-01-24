@@ -3,6 +3,8 @@ import mysql.connector
 from flask import request, redirect, url_for
 import os
 from werkzeug.utils import secure_filename
+from resume_parser.extract_text import extract_text_from_pdf
+
 
 
 app = Flask(__name__)
@@ -30,7 +32,6 @@ def allowed_file(filename):
 @app.route('/upload', methods=['POST'])
 def upload_resume():
 
-    # Create uploads folder if not exists
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
 
@@ -49,7 +50,12 @@ def upload_resume():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
 
-    return "Resume uploaded successfully"
+    # 🔽 THIS MUST BE INSIDE THE FUNCTION
+    text = extract_text_from_pdf(file_path)
+    print(text[:500])   # debug output
+
+    return "Resume uploaded & text extracted successfully"
+
 
 
 if __name__ == "__main__":
