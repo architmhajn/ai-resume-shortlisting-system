@@ -4,6 +4,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 from resume_parser.skill_extractor import extract_skills
+from resume_parser.scorer import calculate_match_score
 
 from resume_parser.extract_text import extract_text_from_pdf
 
@@ -61,6 +62,33 @@ def upload_resume():
 
     text = extract_text_from_pdf(file_path)
     skills = extract_skills(text)
+    jd_text = request.form.get('job_description', '').strip()
+
+    if not jd_text:
+        jd_skills = []
+        score = None
+        missing_skills = []
+        status = "JD Not Provided"
+
+        print("JD Skills:", jd_skills)
+        print("Status:", status)
+
+    else:
+        jd_skills = extract_skills(jd_text)
+        score, missing_skills, status = calculate_match_score(skills, jd_skills)
+
+        print("JD Skills:", jd_skills)
+        print("Match Score:", score)
+        print("Missing Skills:", missing_skills)
+        print("Final Status:", status)
+
+
+
+    jd_skills = extract_skills(jd_text)
+
+    print("Resume Skills:", skills)
+    print("JD Skills:", jd_skills)
+
     print("Extracted Skills:", skills)
 
     conn = get_db_connection()
