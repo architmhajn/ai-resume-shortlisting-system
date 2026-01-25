@@ -1,9 +1,17 @@
+import sys
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+from resume_parser.skill_extractor import extract_skills
+
+from resume_parser.extract_text import extract_text_from_pdf
+
 from flask import Flask, render_template
 import mysql.connector
 from flask import request, redirect, url_for
 import os
 from werkzeug.utils import secure_filename
-from resume_parser.extract_text import extract_text_from_pdf
 
 
 
@@ -50,11 +58,26 @@ def upload_resume():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
 
-    # 🔽 THIS MUST BE INSIDE THE FUNCTION
-    text = extract_text_from_pdf(file_path)
-    print(text[:500])   # debug output
 
-    return "Resume uploaded & text extracted successfully"
+    text = extract_text_from_pdf(file_path)
+    skills = extract_skills(text)
+    print("Extracted Skills:", skills)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    sql = """
+    INSERT INTO resumes (filename, extracted_text)
+    VALUES (%s, %s)
+    """
+    cursor.execute(sql, (filename, text))
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return "Resume uploaded, text extracted & saved to database"
+
 
 
 
