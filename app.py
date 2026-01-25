@@ -104,7 +104,15 @@ def upload_resume():
     cursor.close()
     conn.close()
 
-    return "Resume uploaded, text extracted & saved to database"
+    return render_template(
+    "result.html",
+    resume_skills=skills,
+    jd_skills=jd_skills if jd_text else "Not Provided",
+    score=score,
+    missing_skills=missing_skills,
+    status=status
+)
+
 
 
 
