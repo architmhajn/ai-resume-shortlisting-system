@@ -14,9 +14,11 @@ CREATE TABLE job_descriptions (
 CREATE TABLE results (
     id INT AUTO_INCREMENT PRIMARY KEY,
     resume_id INT,
-    match_score INT,
-    missing_skills TEXT,
+    score INT,
     status VARCHAR(50),
+    missing_skills TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (resume_id) REFERENCES resumes(id)
 );
+
+DESC results;

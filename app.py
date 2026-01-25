@@ -132,6 +132,31 @@ VALUES (%s, %s, %s, %s)
 """
 
 
+@app.route('/dashboard')
+def dashboard():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    query = """
+    SELECT 
+        r.id,
+        r.filename,
+        res.score,
+        res.status,
+        res.missing_skills,
+        res.created_at
+    FROM resumes r
+    JOIN results res ON r.id = res.resume_id
+    ORDER BY res.score DESC
+    """
+
+    cursor.execute(query)
+    results = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template("dashboard.html", results=results)
 
 
 
