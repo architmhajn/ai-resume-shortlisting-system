@@ -99,6 +99,19 @@ def upload_resume():
     VALUES (%s, %s)
     """
     cursor.execute(sql, (filename, text))
+    resume_id = cursor.lastrowid
+    conn.commit()
+    
+    cursor.execute(
+        insert_result_sql,
+        (
+            resume_id,
+            score if score is not None else 0,
+            status,
+            ", ".join(missing_skills)
+        )
+    )
+
     conn.commit()
 
     cursor.close()
@@ -112,6 +125,11 @@ def upload_resume():
     missing_skills=missing_skills,
     status=status
 )
+
+insert_result_sql = """
+INSERT INTO results (resume_id, score, status, missing_skills)
+VALUES (%s, %s, %s, %s)
+"""
 
 
 
