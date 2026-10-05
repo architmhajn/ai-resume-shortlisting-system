@@ -1,31 +1,19 @@
 def calculate_structured_score(resume_profile, jd_profile):
-    """Score explicit experience and education evidence.
+    """Score experience, education, projects and certifications as evidence."""
+    required_experience = jd_profile.get("min_experience_years", jd_profile.get("experience_years", 0)) or 0
+    candidate_experience = float(resume_profile.get("experience_years", 0) or 0)
+    experience_score = min(candidate_experience / required_experience, 1.0) * 100 if required_experience else 100.0
 
-    Missing sections are not treated as automatic failures; only explicit JD
-    requirements influence these components.
-    """
-    experience_required = jd_profile.get("experience_years", 0)
-    candidate_experience = resume_profile.get("experience_years", 0)
+    education_required = bool(jd_profile.get("education") or jd_profile.get("education_required"))
+    education_score = 100.0 if (not education_required or resume_profile.get("has_education")) else 0.0
+    project_score = 100.0 if resume_profile.get("has_projects") else 0.0
+    certification_score = 100.0 if resume_profile.get("has_certifications") else 0.0
 
-    if experience_required:
-        experience_score = min(candidate_experience / experience_required, 1.0) * 100
-    else:
-        experience_score = 100.0
-
-    if jd_profile.get("education_required"):
-        education_score = 100.0 if resume_profile.get("has_education") else 0.0
-    else:
-        education_score = 100.0
-
-    # Experience is more informative than section presence, but both remain
-    # subordinate to explicit skills and semantic relevance.
-    return round(experience_score * 0.70 + education_score * 0.30)
+    return round(experience_score * 0.55 + education_score * 0.25 + project_score * 0.10 + certification_score * 0.10)
 
 
 def build_explanation(resume_profile, jd_profile, skill_score, semantic_score):
-    reasons = []
-    gaps = []
-
+    reasons, gaps = [], []
     if skill_score >= 80:
         reasons.append("Strong explicit skill alignment")
     elif skill_score >= 60:
@@ -38,7 +26,7 @@ def build_explanation(resume_profile, jd_profile, skill_score, semantic_score):
     elif semantic_score < 55:
         gaps.append("Low contextual similarity to the job description")
 
-    required_experience = jd_profile.get("experience_years", 0)
+    required_experience = jd_profile.get("min_experience_years", jd_profile.get("experience_years", 0)) or 0
     actual_experience = resume_profile.get("experience_years", 0)
     if required_experience:
         if actual_experience >= required_experience:
@@ -46,7 +34,15 @@ def build_explanation(resume_profile, jd_profile, skill_score, semantic_score):
         else:
             gaps.append(f"Experience evidence is below the {required_experience}-year requirement")
 
-    if jd_profile.get("education_required") and not resume_profile.get("has_education"):
-        gaps.append("Required education evidence was not detected")
+    if jd_profile.get("education") or jd_profile.get("education_required"):
+        if resume_profile.get("has_education"):
+            reasons.append("Education evidence detected")
+        else:
+            gaps.append("Required education evidence was not detected")
+
+    if resume_profile.get("has_projects"):
+        reasons.append("Relevant project evidence detected")
+    if resume_profile.get("has_certifications"):
+        reasons.append("Certification evidence detected")
 
     return reasons, gaps
