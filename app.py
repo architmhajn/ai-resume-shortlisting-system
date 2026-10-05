@@ -10,10 +10,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 
 from resume_parser.extract_text import extract_text_from_pdf
+from resume_parser.llm_extractor import extract_jd_with_llm, extract_resume_with_llm
+from resume_parser.profile_extractor import extract_job_profile, extract_resume_profile
 from resume_parser.scorer import calculate_match_score
 from resume_parser.semantic_matcher import semantic_similarity
 from resume_parser.skill_extractor import extract_skills
-from resume_parser.structure_extractor import extract_jd_profile, extract_structure
 from resume_parser.structured_scorer import build_explanation, calculate_structured_score
 
 app = Flask(__name__)
@@ -34,8 +35,6 @@ def allowed_file(filename):
 
 
 def calculate_final_score(skill_score, semantic_score, structured_score):
-    # Skills remain the strongest signal; structure adds evidence without
-    # overpowering actual technical alignment.
     return round(skill_score * 0.50 + semantic_score * 0.30 + structured_score * 0.20)
 
 
@@ -50,14 +49,13 @@ def analyze_candidate(resume_text, jd_text):
         print(f"Semantic matcher unavailable: {exc}")
         semantic_score = 0.0
 
-    resume_profile = extract_structure(resume_text)
-    jd_profile = extract_jd_profile(jd_text)
+    resume_profile = extract_resume_profile(resume_text)
+    jd_profile = extract_job_profile(jd_text)
     structured_score = calculate_structured_score(resume_profile, jd_profile)
     score = calculate_final_score(skill_score, semantic_score, structured_score)
     reasons, evidence_gaps = build_explanation(resume_profile, jd_profile, skill_score, semantic_score)
-
     all_gaps = list(dict.fromkeys(missing_skills + evidence_gaps))
-    status = "Shortlisted" if score >= 70 else "Rejected"
+
     return {
         "score": score,
         "skill_score": skill_score,
@@ -65,10 +63,11 @@ def analyze_candidate(resume_text, jd_text):
         "structured_score": structured_score,
         "missing_skills": all_gaps,
         "reasons": reasons,
-        "status": status,
-        "experience_years": resume_profile["experience_years"],
-        "has_projects": resume_profile["has_projects"],
-        "has_certifications": resume_profile["has_certifications"],
+        "status": "Shortlisted" if score >= 70 else "Rejected",
+        "experience_years": resume_profile.get("experience_years", 0),
+        "has_projects": resume_profile.get("has_projects", False),
+        "has_certifications": resume_profile.get("has_certifications", False),
+        "llm_enriched": bool(extract_resume_with_llm(resume_text) or extract_jd_with_llm(jd_text)),
     }
 
 
@@ -101,33 +100,28 @@ def upload_resume():
         analysis = analyze_candidate(text, jd_text)
         jd_skills = extract_skills(jd_text)
     else:
-        analysis = {"score": None, "skill_score": None, "semantic_score": None,
-                    "structured_score": None, "missing_skills": [], "reasons": [],
-                    "status": "JD Not Provided", "experience_years": 0,
-                    "has_projects": False, "has_certifications": False}
+        analysis = {"score": None, "skill_score": None, "semantic_score": None, "structured_score": None,
+                    "missing_skills": [], "reasons": [], "status": "JD Not Provided", "experience_years": 0,
+                    "has_projects": False, "has_certifications": False, "llm_enriched": False}
         jd_skills = []
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = get_db_connection(); cursor = conn.cursor()
     try:
         cursor.execute("INSERT INTO resumes (filename, extracted_text) VALUES (%s, %s)", (filename, text))
         resume_id = cursor.lastrowid
         cursor.execute(insert_result_sql, (resume_id, analysis["score"] or 0, analysis["status"], ", ".join(analysis["missing_skills"])))
         conn.commit()
     except Exception:
-        conn.rollback()
-        raise
+        conn.rollback(); raise
     finally:
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
 
     return render_template("result.html", resume_skills=extract_skills(text), jd_skills=jd_skills or "Not Provided", **analysis)
 
 
 @app.route("/dashboard")
 def dashboard():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("SELECT r.id, r.filename, res.score, res.status, res.missing_skills, res.created_at FROM resumes r JOIN results res ON r.id = res.resume_id ORDER BY res.score DESC")
         results = cursor.fetchall()
