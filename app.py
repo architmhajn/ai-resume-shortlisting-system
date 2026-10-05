@@ -43,8 +43,8 @@ def analyze_candidate(resume_text, jd_text):
     except Exception as exc:
         print(f"Semantic matcher unavailable: {exc}")
         semantic_score = 0.0
-    resume_profile = extract_resume_profile(resume_text)
-    jd_profile = extract_job_profile(jd_text)
+    resume_profile, resume_llm_used = extract_resume_profile(resume_text, return_source=True)
+    jd_profile, jd_llm_used = extract_job_profile(jd_text, return_source=True)
     structured_score = calculate_structured_score(resume_profile, jd_profile)
     score = calculate_final_score(skill_score, semantic_score, structured_score)
     reasons, evidence_gaps = build_explanation(resume_profile, jd_profile, skill_score, semantic_score)
@@ -56,6 +56,7 @@ def analyze_candidate(resume_text, jd_text):
         "experience_years": resume_profile.get("experience_years", 0),
         "has_projects": resume_profile.get("has_projects", False),
         "has_certifications": resume_profile.get("has_certifications", False),
+        "llm_enriched": resume_llm_used or jd_llm_used,
     }
 
 
