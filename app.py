@@ -34,8 +34,32 @@ def allowed_file(filename):
 
 
 def calculate_final_score(skill_score, semantic_score):
-    """Combine deterministic skill matching with semantic relevance."""
     return round(skill_score * 0.65 + semantic_score * 0.35)
+
+
+def analyze_candidate(resume_text, jd_text):
+    """Score one stored resume against the supplied job description."""
+    resume_skills = extract_skills(resume_text)
+    jd_skills = extract_skills(jd_text)
+    skill_score, missing_skills, _ = calculate_match_score(
+        resume_skills, jd_skills, jd_text=jd_text
+    )
+
+    try:
+        semantic_score = semantic_similarity(resume_text, jd_text)
+    except Exception as exc:
+        print(f"Semantic matcher unavailable: {exc}")
+        semantic_score = 0.0
+
+    score = calculate_final_score(skill_score, semantic_score)
+    status = "Shortlisted" if score >= 70 else "Rejected"
+    return {
+        "score": score,
+        "skill_score": skill_score,
+        "semantic_score": semantic_score,
+        "missing_skills": missing_skills,
+        "status": status,
+    }
 
 
 insert_result_sql = """
@@ -72,20 +96,13 @@ def upload_resume():
     jd_text = request.form.get("job_description", "").strip()
 
     if jd_text:
+        analysis = analyze_candidate(text, jd_text)
         jd_skills = extract_skills(jd_text)
-        skill_score, missing_skills, _ = calculate_match_score(
-            skills, jd_skills, jd_text=jd_text
-        )
-
-        try:
-            semantic_score = semantic_similarity(text, jd_text)
-        except Exception as exc:
-            # Semantic matching is an enhancement, not a reason to break the ATS.
-            print(f"Semantic matcher unavailable: {exc}")
-            semantic_score = 0.0
-
-        score = calculate_final_score(skill_score, semantic_score)
-        status = "Shortlisted" if score >= 70 else "Rejected"
+        score = analysis["score"]
+        skill_score = analysis["skill_score"]
+        semantic_score = analysis["semantic_score"]
+        missing_skills = analysis["missing_skills"]
+        status = analysis["status"]
     else:
         jd_skills = []
         score = None
@@ -102,15 +119,9 @@ def upload_resume():
             (filename, text),
         )
         resume_id = cursor.lastrowid
-
         cursor.execute(
             insert_result_sql,
-            (
-                resume_id,
-                score if score is not None else 0,
-                status,
-                ", ".join(missing_skills),
-            ),
+            (resume_id, score if score is not None else 0, status, ", ".join(missing_skills)),
         )
         conn.commit()
     except Exception:
@@ -139,13 +150,8 @@ def dashboard():
     try:
         cursor.execute(
             """
-            SELECT
-                r.id,
-                r.filename,
-                res.score,
-                res.status,
-                res.missing_skills,
-                res.created_at
+            SELECT r.id, r.filename, res.score, res.status,
+                   res.missing_skills, res.created_at
             FROM resumes r
             JOIN results res ON r.id = res.resume_id
             ORDER BY res.score DESC
@@ -155,8 +161,43 @@ def dashboard():
     finally:
         cursor.close()
         conn.close()
+    return render_template("dashboard.html", results=results, ranked=False, job_description="")
 
-    return render_template("dashboard.html", results=results)
+
+@app.route("/rank", methods=["POST"])
+def rank_resumes():
+    jd_text = request.form.get("job_description", "").strip()
+    if not jd_text:
+        return "Job description is required", 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id, filename, extracted_text FROM resumes ORDER BY id DESC")
+        candidates = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    ranked = []
+    for candidate in candidates:
+        analysis = analyze_candidate(candidate["extracted_text"], jd_text)
+        ranked.append({
+            "id": candidate["id"],
+            "filename": candidate["filename"],
+            **analysis,
+        })
+
+    ranked.sort(key=lambda row: row["score"], reverse=True)
+    for position, row in enumerate(ranked, start=1):
+        row["rank"] = position
+
+    return render_template(
+        "dashboard.html",
+        results=ranked,
+        ranked=True,
+        job_description=jd_text,
+    )
 
 
 if __name__ == "__main__":
