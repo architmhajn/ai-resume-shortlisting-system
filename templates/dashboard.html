@@ -2,51 +2,67 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Resume Rankings</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
+<div class="container mt-5 mb-5">
+    <h2 class="text-center mb-4">AI Resume Rankings</h2>
 
-<div class="container mt-5">
-    <h2 class="text-center mb-4">Admin Dashboard – Resume Rankings</h2>
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="POST" action="/rank">
+                <label class="form-label fw-semibold">Rank all uploaded resumes against a Job Description</label>
+                <textarea name="job_description" class="form-control" rows="5" required>{{ job_description }}</textarea>
+                <button class="btn btn-primary mt-3" type="submit">Rank Candidates</button>
+                <a href="/" class="btn btn-outline-secondary mt-3">Upload Resume</a>
+            </form>
+        </div>
+    </div>
 
-    <table class="table table-bordered table-striped">
+    {% if ranked %}
+    <div class="alert alert-info">Candidates ranked by combined skill and semantic relevance.</div>
+    {% endif %}
+
+    <div class="table-responsive">
+    <table class="table table-bordered table-striped align-middle bg-white">
         <thead class="table-dark">
             <tr>
-                <th>ID</th>
-                <th>Resume</th>
-                <th>Score (%)</th>
+                {% if ranked %}<th>Rank</th>{% endif %}
+                <th>Candidate</th>
+                <th>Overall</th>
+                {% if ranked %}<th>Skills</th><th>Semantic</th>{% endif %}
                 <th>Status</th>
-                <th>Missing Skills</th>
-                <th>Submitted</th>
+                <th>Skill Gaps</th>
             </tr>
         </thead>
         <tbody>
-            {% for row in results %}
+        {% for row in results %}
             <tr>
-                <td>{{ row.id }}</td>
+                {% if ranked %}<td class="fw-bold">#{{ row.rank }}</td>{% endif %}
                 <td>{{ row.filename }}</td>
-                <td>{{ row.score }}</td>
+                <td class="fw-bold">{{ row.score }}%</td>
+                {% if ranked %}<td>{{ row.skill_score }}%</td><td>{{ row.semantic_score }}%</td>{% endif %}
                 <td>
                     {% if row.status == "Shortlisted" %}
                         <span class="badge bg-success">Shortlisted</span>
-                    {% elif row.status == "Rejected" %}
-                        <span class="badge bg-danger">Rejected</span>
                     {% else %}
-                        <span class="badge bg-secondary">{{ row.status }}</span>
+                        <span class="badge bg-danger">Rejected</span>
                     {% endif %}
                 </td>
-                <td>{{ row.missing_skills }}</td>
-                <td>{{ row.created_at }}</td>
+                <td>
+                    {% if row.missing_skills %}
+                        {{ row.missing_skills if row.missing_skills is string else row.missing_skills|join(', ') }}
+                    {% else %}-{% endif %}
+                </td>
             </tr>
-            {% endfor %}
+        {% else %}
+            <tr><td colspan="7" class="text-center py-4">No resumes uploaded yet.</td></tr>
+        {% endfor %}
         </tbody>
     </table>
-
-    <div class="text-center mt-4">
-        <a href="/" class="btn btn-primary">Analyze New Resume</a>
     </div>
 </div>
-
 </body>
 </html>
