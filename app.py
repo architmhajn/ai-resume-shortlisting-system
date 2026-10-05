@@ -11,11 +11,12 @@ sys.path.append(BASE_DIR)
 
 from resume_parser.extract_text import extract_text_from_pdf
 from resume_parser.scorer import calculate_match_score
+from resume_parser.semantic_matcher import semantic_similarity
 from resume_parser.skill_extractor import extract_skills
 
 app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = os.path.join(BASE_DIR, "uploads")
-app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"pdf"}
 
 
@@ -30,6 +31,11 @@ def get_db_connection():
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def calculate_final_score(skill_score, semantic_score):
+    """Combine deterministic skill matching with semantic relevance."""
+    return round(skill_score * 0.65 + semantic_score * 0.35)
 
 
 insert_result_sql = """
@@ -56,7 +62,6 @@ def upload_resume():
     if not allowed_file(file.filename):
         return "Only PDF files are allowed", 400
 
-    # UUID avoids overwriting another candidate's upload when filenames match.
     safe_name = secure_filename(file.filename)
     filename = f"{uuid.uuid4().hex}_{safe_name}"
     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
@@ -68,12 +73,24 @@ def upload_resume():
 
     if jd_text:
         jd_skills = extract_skills(jd_text)
-        score, missing_skills, status = calculate_match_score(
+        skill_score, missing_skills, _ = calculate_match_score(
             skills, jd_skills, jd_text=jd_text
         )
+
+        try:
+            semantic_score = semantic_similarity(text, jd_text)
+        except Exception as exc:
+            # Semantic matching is an enhancement, not a reason to break the ATS.
+            print(f"Semantic matcher unavailable: {exc}")
+            semantic_score = 0.0
+
+        score = calculate_final_score(skill_score, semantic_score)
+        status = "Shortlisted" if score >= 70 else "Rejected"
     else:
         jd_skills = []
         score = None
+        semantic_score = None
+        skill_score = None
         missing_skills = []
         status = "JD Not Provided"
 
@@ -108,6 +125,8 @@ def upload_resume():
         resume_skills=skills,
         jd_skills=jd_skills if jd_text else "Not Provided",
         score=score,
+        skill_score=skill_score,
+        semantic_score=semantic_score,
         missing_skills=missing_skills,
         status=status,
     )
