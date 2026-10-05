@@ -11,7 +11,7 @@ SKILL_ALIASES = {
     "postgresql": ["postgresql", "postgres", "postgre sql"],
     "flask": ["flask", "flask framework"],
     "django": ["django", "django framework"],
-    "spring": ["spring", "spring framework", "spring boot"],
+    "spring": ["spring", "spring framework"],
     "html": ["html", "html5"],
     "css": ["css", "css3"],
     "javascript": ["javascript", "js", "ecmascript"],
@@ -44,8 +44,6 @@ def extract_skills(text):
 
     for canonical, aliases in SKILL_ALIASES.items():
         for alias in aliases:
-            # Boundary checks prevent short skills such as 'c' from matching
-            # inside unrelated words.
             pattern = r"(?<!\\w)" + re.escape(alias) + r"(?!\\w)"
             if re.search(pattern, normalized):
                 found_skills.add(canonical)
