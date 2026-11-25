@@ -8,18 +8,18 @@ def extract_jd_requirements(jd_text, jd_skills):
     preferred = set()
 
     required_chunks = re.findall(
-        r"(?:required|must have|mandatory|essential|should have|strong knowledge of|proficient in|experience with)[^.\\n:;]{0,180}",
+        r"(?:required|must have|mandatory|essential|should have|strong knowledge of|proficient in|experience with)[^.\n:;]{0,180}",
         text,
         re.I,
     )
     preferred_chunks = re.findall(
-        r"(?:preferred|nice to have|good to have|plus|bonus|desirable)[^.\\n]{0,180}",
+        r"(?:preferred|nice to have|good to have|plus|bonus|desirable)[^.\n]{0,180}",
         text,
         re.I,
     )
 
     for skill in jd_skills:
-        pattern = r"(?<!\\w)" + re.escape(skill.lower()) + r"(?!\\w)"
+        pattern = r"(?<!\w)" + re.escape(skill.lower()) + r"(?!\w)"
         if any(re.search(pattern, chunk, re.I) for chunk in required_chunks):
             required.add(skill)
         elif any(re.search(pattern, chunk, re.I) for chunk in preferred_chunks):
@@ -40,7 +40,7 @@ def calculate_match_score(resume_skills, jd_skills, jd_text=None):
     jd_set = set(jd_skills)
 
     if not jd_set:
-        return 0, [], "Rejected"
+        return 0, ["No recognizable skills found in the job description"], "Rejected"
 
     if jd_text:
         required_skills, preferred_skills = extract_jd_requirements(jd_text, jd_skills)
