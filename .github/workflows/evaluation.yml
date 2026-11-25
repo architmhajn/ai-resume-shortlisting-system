@@ -1,0 +1,21 @@
+name: Evaluation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run evaluation
+        if: hashFiles('evaluation/dataset.jsonl') != ''
+        run: python evaluation/evaluate.py evaluation/dataset.jsonl
+      - name: Explain missing dataset
+        if: hashFiles('evaluation/dataset.jsonl') == ''
+        run: echo "Add evaluation/dataset.jsonl with human-labeled examples before running benchmarks."
